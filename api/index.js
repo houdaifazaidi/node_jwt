@@ -11,7 +11,16 @@ const db = mysql.createConnection({
 
 })
 
+let membersRouter = express.Router()
 
+app.use(express.json())
+app.use(express.urlencoded({extended: true}))
+
+app.use(function(req, res, next){
+    res.header("Access-Control-Allow-Origin", "*")
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+    next()
+})
 
 db.connect((err) => {
     if (err){
@@ -19,18 +28,6 @@ db.connect((err) => {
     }
     else {
         console.log('connected to database')
-
-
-        let membersRouter = express.Router()
-
-        app.use(express.json())
-        app.use(express.urlencoded({extended: true}))
-
-        app.use(function(req, res, next){
-            res.header("Access-Control-Allow-Origin", "*")
-            res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
-            next()
-        })
 
 
         membersRouter.route('/:id')
@@ -101,10 +98,10 @@ db.connect((err) => {
 
         app.use(config.rootAPI+'members', membersRouter)
         //app.listen(config.port, () => console.log('Started on port '+config.port))
-
-        module.exports = app
     }
 })
+
+module.exports = app
 
 
 
