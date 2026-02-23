@@ -1,5 +1,5 @@
 {
-  "name": "atelier2",
+  "name": "atelier3",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mysql": "^2.18.1"
   }
 }

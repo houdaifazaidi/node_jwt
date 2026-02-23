@@ -2,90 +2,109 @@ const {success, error} = require('../functions')
 const express = require('express')
 const app = express()
 const config = require('../config.json')
+const mysql = require('mysql')
+const db = mysql.createConnection({
+    host: 'mysql-houdaifa.alwaysdata.net',
+    user: 'houdaifa',
+    password: 'hodofozodo',
+    database: 'houdaifa_nodejs_rest',
 
-
-let members = [
-    {id: 1, name: 'PHP'},
-    {id: 2, name: 'JavaScript'},
-    {id: 3, name: 'Python'},
-    {id: 4, name: 'Java'},
-    {id: 5, name: 'C#'}
-]
-let currentId = 6
-
-let membersRouter = express.Router()
-
-app.use(express.json())
-app.use(express.urlencoded({extended: true}))
-
-app.use(function(req, res, next){
-    res.header("Access-Control-Allow-Origin", "*")
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
-    next()
 })
 
-membersRouter.route('/:id')
-    .get((req,res) => {
-        let id = parseInt(req.params.id)
-        let member = members.find(m => m.id === id)
-    
-        if (!member) {
-            return res.json(error("Member not found"))
-        }
-        res.json(success(member))
-    })
 
-    .post((req,res) => {
-        let id = parseInt(req.params.id)
-        let member = members.find(m => m.id === id)
-    
-        if (!member) {
-            return res.json(error("Member not found"))
-        }
 
-        for (let i = 0; i < members.length; i++) {
-            if (req.body.name === members[i].name && members[i].id !== id) {
-                return res.json(error("Member name already exists"))
-            }
-        }
+db.connect((err) => {
+    if (err){
+        console.log(err.message)
+    }
+    else {
+        console.log('connected to database')
 
-        member.name = req.body.name
-        res.json(success(true))
-    })
-    .delete((req,res) => {
-        let id = parseInt(req.params.id)
-        let memberIndex = members.findIndex(m => m.id === id)
-    
-        if (memberIndex === -1) {
-            return res.json(error("Member not found"))
-        }
 
-        members.splice(memberIndex, 1)
-        res.json(success(true))
-    })
-    
-membersRouter.route('/')
-    .get((req, res) => {
-        res.json(success(members))
-    })
-    .post((req, res) => {
-        if (!req.body.name){
-            return res.json(error("Missing required parameter: name"))
-        }
-        for (let i = 0; i < members.length; i++) {
-            if (req.body.name === members[i].name) {
-                return res.json(error("Member name already exists"))
-            }
-        }
-        let newMember = {
-            id: currentId++,
-            name: req.body.name
-        }
-        members.push(newMember)
-        res.json(success(newMember))
-    })
+        let membersRouter = express.Router()
 
-app.use(config.rootAPI+'members', membersRouter)
-//app.listen(config.port, () => console.log('Started on port '+config.port))
+        app.use(express.json())
+        app.use(express.urlencoded({extended: true}))
 
-module.exports = app
+        app.use(function(req, res, next){
+            res.header("Access-Control-Allow-Origin", "*")
+            res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+            next()
+        })
+
+
+        membersRouter.route('/:id')
+            .get((req,res) => {
+                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                    if (err) return res.json(error(err.message))
+                    if (results[0] === undefined) return res.json(error("member not found"))
+                    res.json(success(results[0]))
+                })
+            })
+
+            .post((req,res) => {
+                if (!req.body.name) return res.json(error("Missing required parameter: name"))
+                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                    if (err) return res.json(error(err.message))
+                    if (results[0] === undefined) return res.json(error("member not found"))
+                    
+                    db.query('select * from members where name = ? and id != ?', [req.body.name, req.params.id], (err, results) => {
+                        if (err) return res.json(error(err.message))
+                        if (results[0] !== undefined) return res.json(error("Member name already exists"))
+
+                        db.query('update members set name = ? where id = ?', [req.body.name, req.params.id], (err, results) => {
+                            if (err) return res.json(error(err.message))
+                            res.json(success(true))
+                        })
+                    })
+                })
+            })
+            .delete((req,res) => {
+                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                    if (err) return res.json(error(err.message))
+                    if (results[0] === undefined) return res.json(error("member not found"))
+                    
+                    db.query('delete from members where id = ?', [req.params.id], (err, results) => {
+                        if (err) return res.json(error(err.message))
+                        res.json(success(true))
+                    })
+                })
+            })
+            
+        membersRouter.route('/')
+            .get((req, res) => {
+                if (req.query.max === undefined){
+                    db.query('select * from members', (err, results) => {
+                        if (err) return res.json(error(err.message))
+                        return res.json(success(results))
+                    })
+                    return
+                }
+                if (req.query.max <= 0) return res.json(error("Invalid value for parameter: max"))
+                db.query('select * from members limit 0,'+req.query.max, (err, results) => {
+                    if (err) return res.json(error(err.message))
+                    res.json(success(results))
+                })
+            })
+            .post((req, res) => {
+                if (!req.body.name) return res.json(error("Missing required parameter: name"))
+                db.query('select * from members where name = ?', [req.body.name], (err, results) => {
+                    if (err) return res.json(error(err.message))
+                    if (results[0] !== undefined) return res.json(error("Member name already exists"))
+
+                    db.query('insert into members (name) values (?)', [req.body.name], (err, results) => {
+                        if (err) return res.json(error(err.message))
+                        res.json(success(true))
+                    })
+                })
+            })
+
+        app.use(config.rootAPI+'members', membersRouter)
+        //app.listen(config.port, () => console.log('Started on port '+config.port))
+
+        module.exports = app
+    }
+})
+
+
+
