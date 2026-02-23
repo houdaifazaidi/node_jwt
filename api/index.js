@@ -19,18 +19,11 @@ app.use(express.urlencoded({extended: true}))
 app.use(function(req, res, next){
     res.header("Access-Control-Allow-Origin", "*")
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
     next()
 })
 
-db.connect((err) => {
-    if (err){
-        console.log(err.message)
-    }
-    else {
-        console.log('connected to database')
-
-
-        membersRouter.route('/:id')
+membersRouter.route('/:id')
             .get((req,res) => {
                 db.query('select * from members where id = ?', [req.params.id], (err, results) => {
                     if (err) return res.json(error(err.message))
@@ -39,7 +32,7 @@ db.connect((err) => {
                 })
             })
 
-            .post((req,res) => {
+            .put((req,res) => {
                 if (!req.body.name) return res.json(error("Missing required parameter: name"))
                 db.query('select * from members where id = ?', [req.params.id], (err, results) => {
                     if (err) return res.json(error(err.message))
@@ -96,8 +89,15 @@ db.connect((err) => {
                 })
             })
 
-        app.use(config.rootAPI+'members', membersRouter)
-        //app.listen(config.port, () => console.log('Started on port '+config.port))
+app.use(config.rootAPI+'members', membersRouter)
+//app.listen(config.port, () => console.log('Started on port '+config.port))
+
+db.connect((err) => {
+    if (err){
+        console.log(err.message)
+    }
+    else {
+        console.log('connected to database')
     }
 })
 
