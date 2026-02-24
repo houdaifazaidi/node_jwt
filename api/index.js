@@ -3,6 +3,7 @@ const express = require('express')
 const app = express()
 const config = require('../config.json')
 const mysql = require('mysql')
+const jwt = require('jsonwebtoken')
 const db = mysql.createConnection({
     host: 'mysql-houdaifa.alwaysdata.net',
     user: 'houdaifa',
@@ -21,6 +22,43 @@ app.use(function(req, res, next){
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
     next()
+})
+
+// JWT Secret Key
+const JWT_SECRET = 'secret'
+
+// Verify Token Middleware
+const verifyToken = (req, res, next) => {
+    const token = req.headers['authorization']?.split(' ')[1]
+    
+    if (!token) {
+        return res.json(error("No token provided"))
+    }
+    
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.json(error("Invalid or expired token"))
+        }
+        req.user = decoded
+        next()
+    })
+}
+
+// Login Route
+app.post(config.rootAPI + 'login', (req, res) => {
+    const { id, username, password } = req.body
+    
+    // Hardcoded user verification
+    if (id === 1 && username === 'fullstack' && password === '123456') {
+        const token = jwt.sign(
+            { id, username },
+            JWT_SECRET,
+            { expiresIn: '1h' }
+        )
+        return res.json(success({ token }))
+    }
+    
+    res.json(error("Invalid credentials"))
 })
 
 membersRouter.route('/:id')
@@ -89,8 +127,8 @@ membersRouter.route('/:id')
                 })
             })
 
-app.use(config.rootAPI+'members', membersRouter)
-//app.listen(config.port, () => console.log('Started on port '+config.port))
+app.use(config.rootAPI+'members', verifyToken, membersRouter)
+app.listen(config.port, () => console.log('Started on port '+config.port))
 
 db.connect((err) => {
     if (err){
@@ -102,6 +140,3 @@ db.connect((err) => {
 })
 
 module.exports = app
-
-
-
