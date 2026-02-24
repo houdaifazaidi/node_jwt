@@ -9,7 +9,21 @@ const db = mysql.createConnection({
     user: 'houdaifa',
     password: 'hodofozodo',
     database: 'houdaifa_nodejs_rest',
+    multipleStatements: true
+})
 
+// Reconnect to database if connection is lost
+db.on('error', (err) => {
+    console.log('DB error', err)
+    if(err.code === 'PROTOCOL_CONNECTION_LOST') {
+        db.connect()
+    }
+    if(err.code === 'ER_CON_COUNT_ERROR') {
+        db.connect()
+    }
+    if(err.code === 'ECONNREFUSED') {
+        db.connect()
+    }
 })
 
 let membersRouter = express.Router()
@@ -128,7 +142,11 @@ membersRouter.route('/:id')
             })
 
 app.use(config.rootAPI+'members', verifyToken, membersRouter)
-app.listen(config.port, () => console.log('Started on port '+config.port))
+
+// Only listen locally, not on Vercel
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(config.port, () => console.log('Started on port '+config.port))
+}
 
 db.connect((err) => {
     if (err){
