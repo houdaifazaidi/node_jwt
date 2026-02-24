@@ -4,7 +4,10 @@ const app = express()
 const config = require('../config.json')
 const mysql = require('mysql')
 const jwt = require('jsonwebtoken')
-const db = mysql.createConnection({
+
+// Create connection pool instead of single connection for Vercel
+const pool = mysql.createPool({
+    connectionLimit: 10,
     host: 'mysql-houdaifa.alwaysdata.net',
     user: 'houdaifa',
     password: 'hodofozodo',
@@ -12,19 +15,15 @@ const db = mysql.createConnection({
     multipleStatements: true
 })
 
-// Reconnect to database if connection is lost
-db.on('error', (err) => {
-    console.log('DB error', err)
-    if(err.code === 'PROTOCOL_CONNECTION_LOST') {
-        db.connect()
-    }
-    if(err.code === 'ER_CON_COUNT_ERROR') {
-        db.connect()
-    }
-    if(err.code === 'ECONNREFUSED') {
-        db.connect()
-    }
-})
+// Helper function to execute queries
+const query = (sql, args) => {
+    return new Promise((resolve, reject) => {
+        pool.query(sql, args, (error, results) => {
+            if (error) return reject(error)
+            resolve(results)
+        })
+    })
+}
 
 let membersRouter = express.Router()
 
@@ -77,7 +76,7 @@ app.post(config.rootAPI + 'login', (req, res) => {
 
 membersRouter.route('/:id')
             .get((req,res) => {
-                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                pool.query('select * from members where id = ?', [req.params.id], (err, results) => {
                     if (err) return res.json(error(err.message))
                     if (results[0] === undefined) return res.json(error("member not found"))
                     res.json(success(results[0]))
@@ -86,15 +85,15 @@ membersRouter.route('/:id')
 
             .put((req,res) => {
                 if (!req.body.name) return res.json(error("Missing required parameter: name"))
-                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                pool.query('select * from members where id = ?', [req.params.id], (err, results) => {
                     if (err) return res.json(error(err.message))
                     if (results[0] === undefined) return res.json(error("member not found"))
                     
-                    db.query('select * from members where name = ? and id != ?', [req.body.name, req.params.id], (err, results) => {
+                    pool.query('select * from members where name = ? and id != ?', [req.body.name, req.params.id], (err, results) => {
                         if (err) return res.json(error(err.message))
                         if (results[0] !== undefined) return res.json(error("Member name already exists"))
 
-                        db.query('update members set name = ? where id = ?', [req.body.name, req.params.id], (err, results) => {
+                        pool.query('update members set name = ? where id = ?', [req.body.name, req.params.id], (err, results) => {
                             if (err) return res.json(error(err.message))
                             res.json(success(true))
                         })
@@ -102,11 +101,11 @@ membersRouter.route('/:id')
                 })
             })
             .delete((req,res) => {
-                db.query('select * from members where id = ?', [req.params.id], (err, results) => {
+                pool.query('select * from members where id = ?', [req.params.id], (err, results) => {
                     if (err) return res.json(error(err.message))
                     if (results[0] === undefined) return res.json(error("member not found"))
                     
-                    db.query('delete from members where id = ?', [req.params.id], (err, results) => {
+                    pool.query('delete from members where id = ?', [req.params.id], (err, results) => {
                         if (err) return res.json(error(err.message))
                         res.json(success(true))
                     })
@@ -116,25 +115,25 @@ membersRouter.route('/:id')
         membersRouter.route('/')
             .get((req, res) => {
                 if (req.query.max === undefined){
-                    db.query('select * from members', (err, results) => {
+                    pool.query('select * from members', (err, results) => {
                         if (err) return res.json(error(err.message))
                         return res.json(success(results))
                     })
                     return
                 }
                 if (req.query.max <= 0) return res.json(error("Invalid value for parameter: max"))
-                db.query('select * from members limit 0,'+req.query.max, (err, results) => {
+                pool.query('select * from members limit 0,'+req.query.max, (err, results) => {
                     if (err) return res.json(error(err.message))
                     res.json(success(results))
                 })
             })
             .post((req, res) => {
                 if (!req.body.name) return res.json(error("Missing required parameter: name"))
-                db.query('select * from members where name = ?', [req.body.name], (err, results) => {
+                pool.query('select * from members where name = ?', [req.body.name], (err, results) => {
                     if (err) return res.json(error(err.message))
                     if (results[0] !== undefined) return res.json(error("Member name already exists"))
 
-                    db.query('insert into members (name) values (?)', [req.body.name], (err, results) => {
+                    pool.query('insert into members (name) values (?)', [req.body.name], (err, results) => {
                         if (err) return res.json(error(err.message))
                         res.json(success(true))
                     })
@@ -148,12 +147,12 @@ if (process.env.NODE_ENV !== 'production') {
     app.listen(config.port, () => console.log('Started on port '+config.port))
 }
 
-db.connect((err) => {
-    if (err){
-        console.log(err.message)
-    }
-    else {
+pool.getConnection((err, connection) => {
+    if (err) {
+        console.log('DB Connection Error:', err.message)
+    } else {
         console.log('connected to database')
+        connection.release()
     }
 })
 
